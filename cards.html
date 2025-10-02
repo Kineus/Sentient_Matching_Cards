@@ -193,6 +193,7 @@
                 scoreEl.textContent = score;
                 if (timerInterval) clearInterval(timerInterval);
                 startTimer();
+                bgMusic.volume = 0.1; // reduce background music volume
                 bgMusic.play();
 
                 cards = shuffle([...images, ...images]);
