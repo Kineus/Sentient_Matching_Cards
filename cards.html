@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Dobby Match Game</title>
+    <style>
+        :root {
+            --bg: #0b1220;
+            --card: #1e293b;
+            --accent: #38bdf8;
+            --match: #10b981;
+            --muted: #94a3b8
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: var(--bg);
+            color: #fff;
+            font-family: Inter, system-ui, sans-serif
+        }
+
+        h1 {
+            margin: 10px 0
+        }
+
+        #game {
+            display: grid;
+            grid-template-columns: repeat(4, 100px);
+            gap: 12px;
+            margin-top: 20px
+        }
+
+        .card {
+            width: 100px;
+            height: 120px;
+            perspective: 600px;
+            cursor: pointer
+        }
+
+        .inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s;
+            transform-style: preserve-3d
+        }
+
+        .flipped .inner {
+            transform: rotateY(180deg)
+        }
+
+        .front,
+        .back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: bold;
+            overflow: hidden
+        }
+
+        .front {
+            background: var(--card)
+        }
+
+        .back {
+            background: var(--accent);
+            transform: rotateY(180deg);
+            color: #000;
+            font-size: 32px
+        }
+
+        .back img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover
+        }
+
+        .matched .back {
+            background: var(--match);
+            color: #fff
+        }
+
+        #hud {
+            margin-top: 16px;
+            color: var(--muted)
+        }
+
+        button {
+            margin-top: 14px;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            background: var(--accent);
+            color: #000;
+            font-weight: 700;
+            cursor: pointer
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Dobby Match</h1>
+    <div id="hud">Moves: <span id="moves">0</span> | Matches: <span id="matches">0</span> | Time: <span
+            id="time">0</span>s | Score: <span id="score">0</span></div>
+    <div id="game"></div>
+    <button id="restart">Restart</button>
+
+    <audio id="bg-music" loop>
+        <source src="bg-music.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="flip-sound">
+        <source src="flip.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="match-sound">
+        <source src="match.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="win-sound">
+        <source src="win.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        (() => {
+            const gameEl = document.getElementById('game');
+            const movesEl = document.getElementById('moves');
+            const matchesEl = document.getElementById('matches');
+            const timeEl = document.getElementById('time');
+            const scoreEl = document.getElementById('score');
+            const restartBtn = document.getElementById('restart');
+            const bgMusic = document.getElementById('bg-music');
+            const flipSound = document.getElementById('flip-sound');
+            const matchSound = document.getElementById('match-sound');
+            const winSound = document.getElementById('win-sound');
+
+            const images = [
+                'images/dobby.png', 'images/dobby1.png', 'images/dobby2.jpeg', 'images/dobby3.jpeg',
+                'images/dobby4.jpeg', 'images/dobby5.jpeg', 'images/dobby6.jpeg', 'images/dobby7.png'
+            ];
+
+            let cards = [];
+            let flipped = [];
+            let moves = 0;
+            let matches = 0;
+            let time = 0;
+            let timerInterval = null;
+            let score = 0;
+
+            function shuffle(arr) {
+                for (let i = arr.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [arr[i], arr[j]] = [arr[j], arr[i]];
+                }
+                return arr;
+            }
+
+            function startTimer() {
+                if (timerInterval) clearInterval(timerInterval);
+                time = 0;
+                timeEl.textContent = time;
+                timerInterval = setInterval(() => {
+                    time++;
+                    timeEl.textContent = time;
+                }, 1000);
+            }
+
+            function calculateScore() {
+                score = (matches * 100) - (moves * 5) - Math.floor(time / 2);
+                if (score < 0) score = 0;
+                scoreEl.textContent = score;
+            }
+
+            function createBoard() {
+                gameEl.innerHTML = '';
+                moves = 0; matches = 0; flipped = []; score = 0;
+                movesEl.textContent = moves;
+                matchesEl.textContent = matches;
+                scoreEl.textContent = score;
+                if (timerInterval) clearInterval(timerInterval);
+                startTimer();
+                bgMusic.play();
+
+                cards = shuffle([...images, ...images]);
+                cards.forEach((imgSrc, idx) => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = `<div class="inner"><div class="front"></div><div class="back"><img src="${imgSrc}" alt="card"/></div></div>`;
+                    card.dataset.icon = imgSrc;
+                    card.dataset.index = idx;
+                    card.addEventListener('click', () => flipCard(card));
+                    gameEl.appendChild(card);
+                });
+            }
+
+            function flipCard(card) {
+                if (card.classList.contains('flipped') || card.classList.contains('matched') || flipped.length === 2) return;
+                card.classList.add('flipped');
+                flipped.push(card);
+                flipSound.currentTime = 0; flipSound.play();
+
+                if (flipped.length === 2) {
+                    moves++; movesEl.textContent = moves;
+                    const [c1, c2] = flipped;
+                    if (c1.dataset.icon === c2.dataset.icon) {
+                        c1.classList.add('matched');
+                        c2.classList.add('matched');
+                        matches++; matchesEl.textContent = matches;
+                        matchSound.currentTime = 0; matchSound.play();
+                        flipped = [];
+                        calculateScore();
+                        if (matches === images.length) {
+                            clearInterval(timerInterval);
+                            winSound.play();
+                            setTimeout(() => alert('You won in ' + moves + ' moves and ' + time + ' seconds! Score: ' + score), 300);
+                        }
+                    } else {
+                        setTimeout(() => {
+                            c1.classList.remove('flipped');
+                            c2.classList.remove('flipped');
+                            flipped = [];
+                            calculateScore();
+                        }, 1000);
+                    }
+                }
+            }
+
+            restartBtn.addEventListener('click', createBoard);
+            createBoard();
+        })();
+    </script>
+</body>
+
+</html>
